@@ -6,17 +6,34 @@ var percentageToColor2 = require("../percentageToColor").blue;
 
 var element = document.getElementById("sigma-modules");
 
-var nodes = [];
-var edges = [];
-var moduleCount = app.stats.modules.length;
-var chunkCount = app.stats.chunks.length;
-var maxTimestamp = 0;
-var maxSize = 0;
-app.stats.modules.forEach(function(module, idx) {
-	if(module.size > maxSize) maxSize = module.size;
-	if(module.timestamp > maxTimestamp) maxTimestamp = module.timestamp;
-});
-app.stats.modules.forEach(function(module, idx) {
+var nodes, edges, moduleCount, chunkCount, maxTimestamp, maxSize;
+
+var includeName = name => !/\~/.test(name);
+// var includeName = name => /nav-prototype/.test(name);
+
+function filterGraph(sigma, pred) {
+	debugger
+	// sigma.graph.nodes = sigma.graph.nodes.
+}
+
+var s;
+
+function buildGraph(filterPred) {
+
+	nodes = [];
+	edges = [];
+	moduleCount = app.stats.modules.length;
+	chunkCount = app.stats.chunks.length;
+	maxTimestamp = 0;
+	maxSize = 0;
+	app.stats.modules.forEach(function(module, idx) {
+		if(module.size > maxSize) maxSize = module.size;
+		if(module.timestamp > maxTimestamp) maxTimestamp = module.timestamp;
+	});
+
+app.stats.modules
+.filter(module => filterPred(module.name))
+.forEach(function(module, idx) {
 	var color = percentageToColor(Math.pow((module.size+1) / (maxSize+1), 1/4));
 	var done = {};
 	var uniqueReasons = module.reasons.filter(function(reason) {
@@ -46,6 +63,7 @@ app.stats.modules.forEach(function(module, idx) {
 		var parentIdent = reason.moduleIdentifier;
 		var parentModule = app.mapModulesIdent["$"+parentIdent];
 		if(!parentModule) return;
+		if (!filterPred(parentModule.name)) return false;
 		var weight = 1 / uniqueReasons.length / uniqueReasons.length;
 		var async = !module.chunks.some(function(chunk) {
 			return (function isInChunks(chunks, checked) {
@@ -78,7 +96,11 @@ app.stats.modules.forEach(function(module, idx) {
 		});
 	});
 });
-var s = new sigma({
+}
+// buildGraph(x => true);
+buildGraph(includeName);
+
+s = new sigma({
 	graph: {
 		nodes: nodes,
 		edges: edges
@@ -96,6 +118,22 @@ var s = new sigma({
 	}
 });
 
+window.rebuildGraph = function rebuildGraph(filterPred) {
+	buildGraph(filterPred);
+
+	s.graph.clear();
+	s.graph.read({
+		nodes: nodes,
+		edges: edges
+	});
+	s.refresh();
+	s.startForceAtlas2();
+	s.renderers[0].resize();
+}
+
+
+// filterGraph(s, n => !/\~/.test(n));
+
 var activeModuleUid = null;
 
 s.bind("clickNode", function(e) {
@@ -103,9 +141,12 @@ s.bind("clickNode", function(e) {
 		window.location.hash = "#modules";
 	else
 		window.location.hash = "#module/" + e.data.node.moduleUid;
+
+	// s.graph.dropNode(e.data.node.id);
 });
 
 s.refresh();
+
 
 exports.show = function() {
 	element.style.display = "block";
